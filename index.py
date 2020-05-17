@@ -18,9 +18,7 @@ db = SQLAlchemy(app)
 tags = db.Table('tags',
     db.Column('company_id', db.Integer, db.ForeignKey('company.id'), primary_key=True),
     db.Column('tag_id', db.Integer, db.ForeignKey('tag.id'), primary_key=True)
-    
 )
-
 
 class Company(db.Model):
     __table_name__ = 'company' # table name
@@ -39,6 +37,7 @@ class Tag(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     tag = db.Column(db.String(50),unique=True)
     lang = db.Column(db.String(50))  
+
 
 class SearchCompanyByName(Resource):
     def get(self,name):
@@ -60,9 +59,6 @@ class SearchCompanyByName(Resource):
             data['tags'] = each[2]
 
         return jsonify(response=data)
-        
-    def post(self):
-        return {'status': 'success'}
 
 
 class SearchCompanyByTag(Resource):
@@ -76,8 +72,8 @@ class SearchCompanyByTag(Resource):
 
         data = {}
         data2 = Company.query().filter(Company.tags.any(Tag.tag == tag))
-        print(data2)
-        
+        # print(data2)
+
         query = Company.query.join(Tag, Company.id==Tag.company_id)
         if args['lang']=='en':
             result = query\
@@ -120,12 +116,12 @@ class AddTag(Resource):
                 Company.company_name_ko==name)
             ).first_or_404()
         
-        newTag = Tag(tag=args['tag'], lang=args['tagLang'], company_id=com.id)
-        
-        db.session.add(newTag)
+        newTag = Tag(tag=args['tag'], lang=args['tagLang'])
+        com.tags.append(newTag)
+        # db.session.add(newTag)
         db.session.commit()
-        
-        return ''
+        data = {'result':'success'}
+        return jsonify(response=data)
 
 class CompanyTagControl(Resource):
     def delete(self, name, tag):
@@ -133,8 +129,7 @@ class CompanyTagControl(Resource):
             parser = reqparse.RequestParser()
             parser.add_argument('lang', type=str, location='args',required=False)
             parser.add_argument('tag', type=str, location='form',required=True)
-            parser.add_argument('tagLang', type=str, location='form',required=True)
-            # parser.add_argument('name', type=str, location='args',required=True)
+            parser.add_argument('tagLang', type=str, location='form',required=True)            
             args = parser.parse_args()
         except Exception  as e :
             return {'error':str(e)}
@@ -146,12 +141,13 @@ class CompanyTagControl(Resource):
                 Company.company_name_ko==name)
             ).first_or_404()
         
-        newTag = Tag(tag=args['tag'], lang=args['tagLang'], company_id=com.id)
-        
-        db.session.add(newTag)
+        # newTag = Tag(tag=args['tag'], lang=args['tagLang'], company_id=com.id)
+        com.tags.remove(args['tag'])
+        # db.session.delete(newTag)
         db.session.commit()
         
-        return ''        
+        data = {'result':'success'}
+        return jsonify(response=data)
     
 api.add_resource(SearchCompanyByName, '/api/company/search/name/<string:name>')
 api.add_resource(SearchCompanyByTag, '/api/company/search/tags/<string:tag>')
