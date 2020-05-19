@@ -1,5 +1,5 @@
 # -- coding: utf-8 --
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_restplus import Api, reqparse, Resource, abort,fields
 from flask_sqlalchemy import SQLAlchemy
 import sqlalchemy 
@@ -161,28 +161,29 @@ class SearchCompanyByTag(Resource):
             
         return jsonify(response=response)
 
+add_tag = api.model('tag',{
+    'tag':fields.String(description='회사정보에 추가하려는 tag명, 없을 경우 생성해서 추가', required=True),
+    'tagLang':fields.String(description='추가되는 tag의 언어타입 설정.(ko,en,ja etc)', required=True),
+})
 # @api.route('/api/company/<string:name>/tags')
 @api.doc(params={'name': 'company name'})
 class AddTag(Resource):
     @api.doc(params={'lang': {
             'description': '언어선택(ko,en,ja)중 선택가능. default:ko', 
-            'in': 'query', 'type': 'string'},
-        'tag':{
-            'description': '회사정보에 추가하려는 tag명, 없을 경우 생성해서 추가', 
-            'in': 'body', 'type': 'string'},
-        'tagLang':{
-            'description': '추가되는 tag의 언어타입 설정.(ko,en,ja etc)', 
-            'in': 'body', 'type': 'string'}
+            'in': 'query', 'type': 'string'}
     })
+    @api.expect(add_tag)
     def post(self, name):
         try:
             parser = reqparse.RequestParser()
             parser.add_argument('lang', type=str, location='args',required=False)
-            parser.add_argument('tag', type=str, location='form',required=True)
-            parser.add_argument('tagLang', type=str, location='form',required=True)
             args = parser.parse_args()
+            body = request.json
+           
+            print(args,body)
         except Exception  as e :
-            return {'error':str(e)}
+            return {'error':str(e)}, 400
+        
         
         com = Company.query.filter(
             or_(
@@ -190,14 +191,19 @@ class AddTag(Resource):
                 Company.name_ja==name, 
                 Company.name_ko==name)
             ).first_or_404()
-        try:
-            newTag = Tag(tag=args['tag'], lang=args['tagLang'])
+
+        newTag = Tag.query.filter_by(tag=body['tag']).first()
+        
+        if newTag == None:
+            newTag = Tag(tag=body['tag'], lang=body['tagLang'])
             db.session.add(newTag)
             db.session.commit()
-        except:
-            abort(400)
+        
+        if newTag in com.tags:
+            return {'error':'exist tag'}, 400
 
-        com.tags.append(newTag)               
+        com.tags.append(newTag) 
+        db.session.commit()             
         data = {'result':'success'}
         return jsonify(response=data)
 
@@ -213,7 +219,14 @@ class CompanyTagControl(Resource):
                 Company.name_ko==name)
             ).first_or_404()
         
-        com.tags.remove(tag)        
+        tag_id =None
+        for each in com.tags:
+            if each.tag ==tag:
+                tag_id = each
+        
+        if tag_id == None:
+            return {"error":'Not exist tag in company info'}, 400
+        com.tags.remove(tag_id)        
         db.session.commit()
         
         data = {'result':'success'}
